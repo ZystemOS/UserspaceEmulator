@@ -121,7 +121,7 @@ pub const CPU = struct {
             },
             .AddImm8Reg => |add_val| {
                 var new_reg_val = self.getRegisterValue(add_val.reg);
-                
+
                 if (add_val.imm8 < 0) {
                     const abs_imm8 = std.math.absCast(add_val.imm8);
                     new_reg_val -= abs_imm8;
@@ -129,6 +129,26 @@ pub const CPU = struct {
                     new_reg_val += @intCast(u32, add_val.imm8);
                 }
                 self.setRegisterValue(add_val.reg, new_reg_val);
+            },
+            // TODO set eflags register
+            .SubImm8Reg => |sub_val| {
+                var new_reg_val = self.getRegisterValue(sub_val.reg);
+
+                if (sub_val.imm8 < 0) {
+                    const abs_imm8 = std.math.absCast(sub_val.imm8);
+                    new_reg_val += abs_imm8;
+                } else {
+                    new_reg_val -= @intCast(u32, sub_val.imm8);
+                }
+                self.setRegisterValue(sub_val.reg, new_reg_val);
+            },
+            .ShiftLeftImm8Reg => |shift_val| {
+                const new_reg_val = self.getRegisterValue(shift_val.reg) << @intCast(u5, shift_val.imm8);
+                self.setRegisterValue(shift_val.reg, new_reg_val);
+            },
+            .AndImm8Reg => |and_val| {
+                const new_reg_val = self.getRegisterValue(and_val.reg) & and_val.imm8;
+                self.setRegisterValue(and_val.reg, new_reg_val);
             },
             .Ret => {
                 std.log.info("Returning: {}\n", .{self.eax});

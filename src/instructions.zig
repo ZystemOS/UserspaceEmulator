@@ -40,6 +40,21 @@ const AddImm8RegType = struct {
     imm8: i8,
 };
 
+const SubImm8RegType = struct {
+    reg: cpu.Register,
+    imm8: i8,
+};
+
+const ShiftLeftImm8RegType = struct {
+    reg: cpu.Register,
+    imm8: u8,
+};
+
+const AndImm8RegType = struct {
+    reg: cpu.Register,
+    imm8: u8,
+};
+
 pub const Instructions = union(enum) {
     Push: PushType,
     Pop: PopType,
@@ -48,6 +63,9 @@ pub const Instructions = union(enum) {
     MovRegLocToReg: MovRegLocToRegType,
     MovRegToRegLoc: MovRegToRegLocType,
     AddImm8Reg: AddImm8RegType,
+    SubImm8Reg: SubImm8RegType,
+    ShiftLeftImm8Reg: ShiftLeftImm8RegType,
+    AndImm8Reg: AndImm8RegType,
     Ret: void,
 };
 
@@ -88,10 +106,28 @@ pub const InstructionDecoder = struct {
                     std.log.info("0x83 Not implemented: 0b{b}", .{mod});
                     break :brk null;
                 }
-                const inst = Instructions{.AddImm8Reg = .{
-                    .reg = getRegister(mod_r_m),
-                    .imm8 = @bitCast(i8, self.bytes[self.index+2])
-                }};
+                const second_opcode = (mod_r_m & 0b00111000) >> 3;
+                const inst = switch (second_opcode) {
+                    // Add
+                    0 => Instructions{.AddImm8Reg = .{
+                        .reg = getRegister(mod_r_m),
+                        .imm8 = @bitCast(i8, self.bytes[self.index+2])
+                        }},
+                    // AND
+                    4 => Instructions{.AndImm8Reg = .{
+                        .reg = getRegister(mod_r_m),
+                        .imm8 = self.bytes[self.index+2]
+                        }},
+                    // Sub
+                    5=> Instructions{.SubImm8Reg = .{
+                        .reg = getRegister(mod_r_m),
+                        .imm8 = @bitCast(i8, self.bytes[self.index+2])
+                        }},
+                    else => {
+                        std.log.info("0x83 Not second opcode: {}", .{second_opcode});
+                        break :brk null;
+                    },
+                };
                 self.index += 3;
                 break :brk inst;
             },
@@ -139,6 +175,23 @@ pub const InstructionDecoder = struct {
                 self.index += 3;
                 break :brk inst;
             },
+            // Shift Left/Right
+            0xC1 => brk: {
+                const mod_r_m = self.bytes[self.index+1];
+                const second_opcode = (mod_r_m & 0b00111000) >> 3;
+                const inst = switch (second_opcode) {
+                    4 => Instructions{.ShiftLeftImm8Reg = .{
+                        .reg = getRegister(mod_r_m),
+                        .imm8 = self.bytes[self.index+2]
+                        }},
+                    else => {
+                        std.log.info("0xC1 Not second opcode: {}", .{second_opcode});
+                        break :brk null;
+                    },
+                };
+                self.index += 3;
+                break :brk inst;
+            },
             // MOV IMM REG/MEM
             0xC7 => brk: {
                 const mod_r_m = self.bytes[self.index+1];
@@ -158,6 +211,7 @@ pub const InstructionDecoder = struct {
                 }};
                 break :brk inst;
             },
+            // Ret
             0xC3 => brk: {
                 const inst = Instructions{.Ret = {}};
                 self.index += 1;

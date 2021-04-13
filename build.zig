@@ -10,22 +10,25 @@ pub fn build(b: *std.build.Builder) void {
 
     const mode = b.standardReleaseOptions();
 
-    const sample = b.addObject("sample1", "src/sample1.zig");
-    sample.setTarget(target);
-    sample.setBuildMode(.Debug);
-    sample.setOutputDir("src");
-
-    const sample = b.addObject("sample2", "src/sample2.zig");
-    sample.setTarget(target);
-    sample.setBuildMode(.Debug);
-    sample.setOutputDir("src");
-
     const exe = b.addExecutable("UserspaceEmulator", "src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
 
-    exe.step.dependOn(&sample.step);
+    const samples = &[_][]const u8{ "sample1", "sample2", "sample3" };
+
+    inline for (samples) |sample| {
+        const sample_obj = b.addObject(sample, "src/" ++ sample ++ ".zig");
+        sample_obj.setTarget(target);
+        sample_obj.setBuildMode(.Debug);
+        sample_obj.setOutputDir("sample_bin");
+        exe.step.dependOn(&sample_obj.step);
+    }
+
+    const test_step = b.step("test", "Run tests");
+    const unit_tests = b.addTest("src/main.zig");
+    unit_tests.setTarget(target);
+    test_step.dependOn(&unit_tests.step);
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
