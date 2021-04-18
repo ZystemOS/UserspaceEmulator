@@ -76,7 +76,7 @@ pub fn main() anyerror!void {
     };
     while (id.next()) |inst| {
         std.log.info("In: {}", .{inst});
-        my_cpu.execInstruction(inst);
+        inst.handler(&my_cpu, &inst);
         std.log.info("CPU: {X}\n", .{my_cpu});
         std.log.info("Stack: {s}\n", .{std.fmt.fmtSliceHexUpper(stack[1000..])});
     }
@@ -103,7 +103,7 @@ fn runProgram(program: []const u8) !u32 {
         .index = 0,
     };
     while (id.next()) |inst| {
-        my_cpu.execInstruction(inst);
+        inst.handler(&my_cpu, &inst);
     }
     return my_cpu.eax;
 }

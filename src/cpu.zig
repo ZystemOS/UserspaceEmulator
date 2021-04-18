@@ -70,91 +70,127 @@ pub const CPU = struct {
         }
     }
 
-    pub fn execInstruction(self: *CPU, instruction: instructions.Instructions) void {
-        switch (instruction) {
-            .Push => |push_val| {
-                self.esp -= 4;
-                var loc = @intToPtr(*u32, self.esp);
-                loc.* = self.getRegisterValue(push_val.reg);
-            },
-            .Pop => |pop_val| {
-                var loc = @intToPtr(*u32, self.esp);
-                self.setRegisterValue(pop_val.reg, loc.*);
-                self.esp += 4;
-            },
-            .MovRegToReg => |mov_val| {
-                const from_val = self.getRegisterValue(mov_val.reg_from);
-                self.setRegisterValue(mov_val.reg_to, from_val);
-            },
-            .MovImm32RegLoc => |mov_val| {
-                var reg_val = self.getRegisterValue(mov_val.reg);
-                if (mov_val.displacement < 0) {
-                    const abs_displacement = std.math.absCast(mov_val.displacement);
-                    reg_val -= abs_displacement;
-                } else {
-                    reg_val += @intCast(u32, mov_val.displacement);
-                }
-                const reg_pointing_to = @intToPtr(*u32, reg_val);
-                reg_pointing_to.* = mov_val.immediate;
-            },
-            .MovRegLocToReg => |mov_val| {
-                var reg_val = self.getRegisterValue(mov_val.reg_from);
-                if (mov_val.displacement < 0) {
-                    const abs_displacement = std.math.absCast(mov_val.displacement);
-                    reg_val -= abs_displacement;
-                } else {
-                    reg_val += @intCast(u32, mov_val.displacement);
-                }
-                const reg_pointing_to = @intToPtr(*u32, reg_val);
-                self.setRegisterValue(mov_val.reg_to, reg_pointing_to.*);
-            },
-            .MovRegToRegLoc => |mov_val| {
-                var reg_val = self.getRegisterValue(mov_val.reg_to);
-                if (mov_val.displacement < 0) {
-                    const abs_displacement = std.math.absCast(mov_val.displacement);
-                    reg_val -= abs_displacement;
-                } else {
-                    reg_val += @intCast(u32, mov_val.displacement);
-                }
-                const reg_pointing_to = @intToPtr(*u32, reg_val);
-                reg_pointing_to.* =self.getRegisterValue(mov_val.reg_from);
-            },
-            .AddImm8Reg => |add_val| {
-                var new_reg_val = self.getRegisterValue(add_val.reg);
+    pub fn notImplemented(cpu: *CPU, instruction: *const instructions.Instruction) void {
+        @panic("Instructions not implemented\n");
+    }
 
-                if (add_val.imm8 < 0) {
-                    const abs_imm8 = std.math.absCast(add_val.imm8);
-                    new_reg_val -= abs_imm8;
-                } else {
-                    new_reg_val += @intCast(u32, add_val.imm8);
-                }
-                self.setRegisterValue(add_val.reg, new_reg_val);
-            },
-            // TODO set eflags register
-            .SubImm8Reg => |sub_val| {
-                var new_reg_val = self.getRegisterValue(sub_val.reg);
+    pub fn pushReg(self: *CPU, instruction: *const instructions.Instruction) void {
+        self.esp -= 4;
+        var loc = @intToPtr(*u32, self.esp);
+        loc.* = self.getRegisterValue(instruction.reg_from.?);
+    }
 
-                if (sub_val.imm8 < 0) {
-                    const abs_imm8 = std.math.absCast(sub_val.imm8);
-                    new_reg_val += abs_imm8;
+    pub fn popReg(self: *CPU, instruction: *const instructions.Instruction) void {
+        var loc = @intToPtr(*u32, self.esp);
+        self.setRegisterValue(instruction.reg_from.?, loc.*);
+        self.esp += 4;
+    }
+
+    pub fn movReg32ToRM32(self: *CPU, instruction: *const instructions.Instruction) void {
+        switch (instruction.reg_addr_mode.?) {
+            .Reg => {
+                const from_val = self.getRegisterValue(instruction.reg_from.?);
+                self.setRegisterValue(instruction.reg_to, from_val);
+            },
+            .RegAddrDisplace8 => {
+                var reg_val = self.getRegisterValue(instruction.reg_to);
+                if (instruction.displacement8.? < 0) {
+                    const abs_displacement = std.math.absCast(instruction.displacement8.?);
+                    reg_val -= abs_displacement;
                 } else {
-                    new_reg_val -= @intCast(u32, sub_val.imm8);
+                    reg_val += @intCast(u32, instruction.displacement8.?);
                 }
-                self.setRegisterValue(sub_val.reg, new_reg_val);
+                const reg_pointing_to = @intToPtr(*u32, reg_val);
+                reg_pointing_to.* = self.getRegisterValue(instruction.reg_from.?);
             },
-            .ShiftLeftImm8Reg => |shift_val| {
-                const new_reg_val = self.getRegisterValue(shift_val.reg) << @intCast(u5, shift_val.imm8);
-                self.setRegisterValue(shift_val.reg, new_reg_val);
-            },
-            .AndImm8Reg => |and_val| {
-                const new_reg_val = self.getRegisterValue(and_val.reg) & and_val.imm8;
-                self.setRegisterValue(and_val.reg, new_reg_val);
-            },
-            .Ret => {
-                std.log.info("Returning: {}\n", .{self.eax});
-            },
+            else => @panic("TODO"),
         }
     }
+
+    pub fn movImm32ToRM32(self: *CPU, instruction: *const instructions.Instruction) void {
+        switch (instruction.reg_addr_mode.?) {
+            .RegAddrDisplace8 => {
+                var reg_val = self.getRegisterValue(instruction.reg_to);
+                if (instruction.displacement8.? < 0) {
+                    const abs_displacement = std.math.absCast(instruction.displacement8.?);
+                    reg_val -= abs_displacement;
+                } else {
+                    reg_val += @intCast(u32, instruction.displacement8.?);
+                }
+                const reg_pointing_to = @intToPtr(*u32, reg_val);
+                reg_pointing_to.* = instruction.immediate_u32.?;
+            },
+            else => @panic("TODO"),
+        }
+    }
+
+    pub fn movRM32ToReg32(self: *CPU, instruction: *const instructions.Instruction) void {
+        switch (instruction.reg_addr_mode.?) {
+            .RegAddrDisplace8 => {
+                var reg_val = self.getRegisterValue(instruction.reg_to);
+                if (instruction.displacement8.? < 0) {
+                    const abs_displacement = std.math.absCast(instruction.displacement8.?);
+                    reg_val -= abs_displacement;
+                } else {
+                    reg_val += @intCast(u32, instruction.displacement8.?);
+                }
+                const reg_pointing_to = @intToPtr(*u32, reg_val);
+                self.setRegisterValue(instruction.reg_from.?, reg_pointing_to.*);
+            },
+            else => @panic("TODO"),
+        }
+    }
+
+    pub fn addImm8RM32(self: *CPU, instruction: *const instructions.Instruction) void {
+        switch(instruction.reg_addr_mode.?) {
+            .Reg => {
+                var new_reg_val = self.getRegisterValue(instruction.reg_to);
+
+                if (instruction.immediate_i8.? < 0) {
+                    const abs_imm8 = std.math.absCast(instruction.immediate_i8.?);
+                    new_reg_val -= abs_imm8;
+                } else {
+                    new_reg_val += @intCast(u32, instruction.immediate_i8.?);
+                }
+                self.setRegisterValue(instruction.reg_to, new_reg_val);
+            },
+            else => @panic("TODO"),
+        }
+    }
+
+    pub fn subImm8RM32(self: *CPU, instruction: *const instructions.Instruction) void {
+        switch(instruction.reg_addr_mode.?) {
+            .Reg => {
+                var new_reg_val = self.getRegisterValue(instruction.reg_to);
+
+                if (instruction.immediate_i8.? < 0) {
+                    const abs_imm8 = std.math.absCast(instruction.immediate_i8.?);
+                    new_reg_val += abs_imm8;
+                } else {
+                    new_reg_val -= @intCast(u32, instruction.immediate_i8.?);
+                }
+                self.setRegisterValue(instruction.reg_to, new_reg_val);
+            },
+            else => @panic("TODO"),
+        }
+    }
+
+    pub fn shiftLeftImm8(self: *CPU, instruction: *const instructions.Instruction) void {
+        // TODO: shift with u8
+        const new_reg_val = self.getRegisterValue(instruction.reg_to) << @intCast(u5, instruction.immediate_u8.?);
+        self.setRegisterValue(instruction.reg_to, new_reg_val);
+    }
+
+    pub fn andImm8(self: *CPU, instruction: *const instructions.Instruction) void {
+        const new_reg_val = self.getRegisterValue(instruction.reg_to) & instruction.immediate_u8.?;
+        self.setRegisterValue(instruction.reg_to, new_reg_val);
+    }
+
+    pub fn ret(self: *CPU, instruction: *const instructions.Instruction) void {
+        std.log.info("Returning: {}\n", .{self.eax});
+    }
+
+    // TODO set eflags register
 
     pub fn init() CPU {
         return .{
